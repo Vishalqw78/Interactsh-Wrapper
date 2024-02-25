@@ -4,15 +4,13 @@ const bodyParser = require("body-parser");
 
 const interactshclient = "interactsh-client";
 
-const subpro = spawn(interactshclient);
 const app = express();
-
 app.use(bodyParser.json());
 
 let url = "";
 const interactionArr = [];
 
-subpro.stdout.on("data", (data) => {
+function processStdoutData(data) {
   let x = data.toString();
   const logLines = x.split("\n");
 
@@ -27,32 +25,17 @@ subpro.stdout.on("data", (data) => {
       interactionArr.push({ interactionType, callerIP, timestamp, url });
     }
   });
-});
+}
 
-subpro.stderr.on("data", (data) => {
+function processStderrData(data) {
   const chunk = data.toString();
-  console.log("start", chunk, "end");
-
   let x = chunk.split(" ");
 
   url = x[x.length - 1];
-
   url = url.slice(0, -1);
-});
+}
 
-subpro.on("error", (error) => {
-  console.error(`error: ${error.message}`);
-});
-subpro.on("close", (code) => {
-  console.log(`child process salida ${code}`);
-});
-app.get("/api/getURL", (req, res) => {
-  res.json({ url });
-});
-
-app.get("/api/getInteractions", (req, res) => {
-  const { start, end } = req.body;
-
+function filterInteractions(start, end) {
   let filteredInteractions = [...interactionArr];
 
   if (start && end) {
@@ -69,6 +52,30 @@ app.get("/api/getInteractions", (req, res) => {
     });
   }
 
+  return filteredInteractions;
+}
+
+const subpro = spawn(interactshclient);
+
+subpro.stdout.on("data", processStdoutData);
+
+subpro.stderr.on("data", processStderrData);
+
+subpro.on("error", (error) => {
+  console.error(`error: ${error.message}`);
+});
+
+subpro.on("close", (code) => {
+  console.log(`child process salida ${code}`);
+});
+
+app.get("/api/getURL", (req, res) => {
+  res.json({ url });
+});
+
+app.get("/api/getInteractions", (req, res) => {
+  const { start, end } = req.body;
+  const filteredInteractions = filterInteractions(start, end);
   res.json(filteredInteractions);
 });
 
